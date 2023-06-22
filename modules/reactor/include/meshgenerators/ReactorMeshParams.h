@@ -51,4 +51,7 @@ protected:
 
   // Map between RGMB element block names, block ids, and region ids
   std::map<std::string, std::pair<subdomain_id_type, dof_id_type>> _name_id_map;
+
+  // Indicate whether to construct Monte Carlo CSG geometry
+  bool _make_mc_csg;
 };

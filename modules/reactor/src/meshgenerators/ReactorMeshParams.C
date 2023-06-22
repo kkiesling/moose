@@ -44,6 +44,11 @@ ReactorMeshParams::validParams()
       "axial_mesh_intervals",
       std::vector<unsigned int>(1),
       "Number of elements in the Z direction for each axial region");
+  params.addParam<bool>(
+      "make_mc_csg",
+      false,
+      "Make the corresponding Monte Carlo CSG geometry input when generating the mesh");
+
   params.addClassDescription("This ReactorMeshParams object acts as storage for persistent "
                              "information about the reactor geometry.");
   return params;
@@ -55,7 +60,8 @@ ReactorMeshParams::ReactorMeshParams(const InputParameters & parameters)
     _geom(getParam<MooseEnum>("geom")),
     _assembly_pitch(getParam<Real>("assembly_pitch")),
     _axial_regions(getParam<std::vector<Real>>("axial_regions")),
-    _axial_mesh_intervals(getParam<std::vector<unsigned int>>("axial_mesh_intervals"))
+    _axial_mesh_intervals(getParam<std::vector<unsigned int>>("axial_mesh_intervals")),
+    _make_mc_csg(getParam<bool>("make_mc_csg"))
 {
   if (_axial_regions.size() != _axial_mesh_intervals.size())
     mooseError("The number of axial regions is not consistent with the number of axial intervals.");
