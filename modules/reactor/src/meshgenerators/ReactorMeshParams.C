@@ -43,6 +43,8 @@ ReactorMeshParams::validParams()
   params.addParam<std::vector<unsigned int>>(
       "axial_mesh_intervals",
       "Number of elements in the Z direction for each axial region");
+  params.addParam<bool>("generate_mc_geometry",
+                        "Whether to generate the corresponding Monte Carlo CSG geometry");
   params.addClassDescription("This ReactorMeshParams object acts as storage for persistent "
                              "information about the reactor geometry.");
   return params;
@@ -52,7 +54,8 @@ ReactorMeshParams::ReactorMeshParams(const InputParameters & parameters)
   : MeshGenerator(parameters),
     _dim(getParam<MooseEnum>("dim")),
     _geom(getParam<MooseEnum>("geom")),
-    _assembly_pitch(getParam<Real>("assembly_pitch"))
+    _assembly_pitch(getParam<Real>("assembly_pitch")),
+    _make_mc_csg(isParamValid("generate_mc_geometry") ? getParam<bool>("generate_mc_geometry") : false)
 {
   if (int(_dim) == 2)
   {
@@ -78,6 +81,8 @@ ReactorMeshParams::ReactorMeshParams(const InputParameters & parameters)
   this->declareMeshProperty(RGMB::mesh_geometry, std::string(_geom));
   this->declareMeshProperty(RGMB::assembly_pitch, _assembly_pitch);
   this->declareMeshProperty("name_id_map", _name_id_map);
+
+  this->declareMeshProperty("generate_mc_geometry", _make_mc_csg);
 
   if (isParamValid("top_boundary_id"))
   {
