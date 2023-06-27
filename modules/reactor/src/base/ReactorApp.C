@@ -1,6 +1,7 @@
 #include "ReactorApp.h"
 #include "Moose.h"
 #include "AppFactory.h"
+#include "ActionFactory.h"
 #include "MooseSyntax.h"
 
 InputParameters
@@ -19,13 +20,15 @@ ReactorApp::ReactorApp(InputParameters parameters) : MooseApp(parameters)
 ReactorApp::~ReactorApp() {}
 
 void
-ReactorApp::registerAll(Factory & f, ActionFactory & af, Syntax & /*s*/)
+ReactorApp::registerAll(Factory & f, ActionFactory & af, Syntax & syntax)
 {
   /* ModulesApp::registerAll(f, af, s); */
   Registry::registerObjectsTo(f, {"ReactorApp"});
   Registry::registerActionsTo(af, {"ReactorApp"});
 
   /* register custom execute flags, action syntax, etc. here */
+  registerSyntax("AddMonteCarloGeomAction", "MonteCarloGeom");
+  registerTask("make_mc_geom", true);
 }
 
 void

@@ -8,18 +8,19 @@
 //* https://www.gnu.org/licenses/lgpl-2.1.html
 
 #include "AddMonteCarloGeomAction.h"
-#include "Factory.h"
-#include "Parser.h"
-#include "FEProblem.h"
+//#include "Factory.h"
+//#include "Parser.h"
+// #include "FEProblem.h"
 
-registerMooseAction("ReactorApp", AddMonteCarloGeomAction, "create_pin");
-registerMooseAction("ReactorApp", AddMonteCarloGeomAction, "create_assembly");
-registerMooseAction("ReactorApp", AddMonteCarloGeomAction, "create_core");
+registerMooseAction("ReactorApp", AddMonteCarloGeomAction, "make_mc_geom");
+//registerMooseAction("ReactorApp", AddMonteCarloGeomAction, "create_assembly");
+//registerMooseAction("ReactorApp", AddMonteCarloGeomAction, "create_core");
 
 InputParameters
 AddMonteCarloGeomAction::validParams()
 {
   InputParameters params = Action::validParams();
+  params.addParam<bool>("make_mc", false, "whether to make mc geom");
   return params;
 }
 
@@ -28,8 +29,8 @@ AddMonteCarloGeomAction::AddMonteCarloGeomAction(const InputParameters & params)
 void
 AddMonteCarloGeomAction::act()
 {
-  if (_current_task == "create_pin")
-  {
-    //pass
-  }
+  //
+  Moose::out << "we are acting on the mc task" << std::endl;
+
 }
+
