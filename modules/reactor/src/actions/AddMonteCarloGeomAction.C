@@ -30,7 +30,8 @@ void
 AddMonteCarloGeomAction::act()
 {
   //
-  Moose::out << "we are acting on the mc task" << std::endl;
-
+  if (_current_task == "make_mc_geom") {
+    Moose::out << "we are acting on the mc task" << std::endl;
+  }
 }
 

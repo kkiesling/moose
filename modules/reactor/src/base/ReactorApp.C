@@ -27,7 +27,8 @@ ReactorApp::registerAll(Factory & f, ActionFactory & af, Syntax & syntax)
   Registry::registerActionsTo(af, {"ReactorApp"});
 
   /* register custom execute flags, action syntax, etc. here */
-  registerSyntax("AddMonteCarloGeomAction", "MonteCarloGeom");
+  registerSyntax("AddMonteCarloGeomAction", "Mesh/ReactorMeshParams/");
+  registerSyntaxTask("AddMonteCarloGeomAction", "Mesh/ReactorMeshParams/", "make_mc_geom");
   registerTask("make_mc_geom", true);
 }
 
