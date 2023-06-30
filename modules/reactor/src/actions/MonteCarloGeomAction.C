@@ -10,7 +10,7 @@
 #include "MonteCarloGeomAction.h"
 #include "ReactorGeometryMeshBuilderBase.h"
 #include "ReactorMeshParams.h"
-
+#include "MeshGenerator.h"
 
 registerMooseAction("ReactorApp", MonteCarloGeomAction, "make_mc");
 
@@ -44,8 +44,48 @@ MonteCarloGeomAction::act()
     if (make_mc)
     {
       // make the titan input
+      Moose::out << "We are making the Titan input" << std::endl;
+
+      auto & output_mesh = _app.actionWarehouse().mesh()->getMesh();
+
+      for (const auto & mgn : mg_names)
+      {
+        const auto & mg = _app.getMeshGenerator(mgn);
+        Moose::out << "Mesh Generator: " << mgn << " " << mg.type() << std::endl;
+
+        if (mg.type() == "CoreMeshGenerator")
+        {
+          makeCoreMeshJSON(mgn);
+        }
+        else if (mg.type() == "AssemblyMeshGenerator")
+        {
+          makeAssemblyMeshJSON(mgn);
+        }
+        else if (mg.type() == "PinMeshGenerator")
+        {
+          makePinMeshJSON(mgn); // if use as assembly, then need to call assembly
+        }
+
+      }
     }
 
   }
 }
 
+void
+MonteCarloGeomAction::makeCoreMeshJSON(std::string mesh_generator_name)
+{
+  const auto & mg = _app.getMeshGenerator(mesh_generator_name);
+}
+
+void
+MonteCarloGeomAction::makeAssemblyMeshJSON(std::string mesh_generator_name)
+{
+  const auto & mg = _app.getMeshGenerator(mesh_generator_name);
+}
+
+void
+MonteCarloGeomAction::makePinMeshJSON(std::string mesh_generator_name)
+{
+  const auto & mg = _app.getMeshGenerator(mesh_generator_name);
+}

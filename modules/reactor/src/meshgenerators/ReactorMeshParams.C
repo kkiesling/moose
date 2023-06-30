@@ -82,8 +82,6 @@ ReactorMeshParams::ReactorMeshParams(const InputParameters & parameters)
   this->declareMeshProperty(RGMB::assembly_pitch, _assembly_pitch);
   this->declareMeshProperty("name_id_map", _name_id_map);
 
-  this->declareMeshProperty("generate_mc_geometry", _make_mc_csg);
-
   if (isParamValid("top_boundary_id"))
   {
     _top_boundary = getParam<boundary_id_type>("top_boundary_id");
@@ -106,6 +104,8 @@ ReactorMeshParams::ReactorMeshParams(const InputParameters & parameters)
   if (isParamValid("top_boundary_id") && isParamValid("bottom_boundary_id") &&
       (_bottom_boundary == _top_boundary))
     mooseError("top_boundary_id and bottom_boundary_id must be unique values");
+
+  this->declareMeshProperty("generate_mc_geometry", _make_mc_csg);
 }
 
 std::unique_ptr<MeshBase>

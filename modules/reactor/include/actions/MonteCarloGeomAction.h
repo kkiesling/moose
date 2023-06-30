@@ -19,4 +19,8 @@ public:
   static InputParameters validParams();
 
   virtual void act() override;
+
+  void makeCoreMeshJSON(std::string mesh_generator_name);
+  void makeAssemblyMeshJSON(std::string mesh_generator_name);
+  void makePinMeshJSON(std::string mesh_generator_name);
 };
