@@ -98,7 +98,7 @@ MonteCarloGeomAction::makePinMeshJSON(std::string mesh_generator_name)
   // get data
   Real pitch = getMeshProperty<Real>(prefix + "_pitch", mesh_generator_name);
 
-  Moose::out << "pin pitch for " << mesh_generator_name << " : " << pin_name << " " << pitch << std::endl;
+  Moose::out << "pin pitch for " << mesh_generator_name << " : " << prefix << " " << pitch << std::endl;
 
   // mg.hasMeshProperty(str)
   // mg.getMeshProperty(str)
