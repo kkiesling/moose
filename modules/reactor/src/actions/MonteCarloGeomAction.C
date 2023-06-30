@@ -11,6 +11,7 @@
 #include "ReactorGeometryMeshBuilderBase.h"
 #include "ReactorMeshParams.h"
 #include "MeshGenerator.h"
+#include "MooseObjectAction.h"
 
 registerMooseAction("ReactorApp", MonteCarloGeomAction, "make_mc");
 
@@ -45,13 +46,12 @@ MonteCarloGeomAction::act()
     {
       // make the titan input
       Moose::out << "We are making the Titan input" << std::endl;
-
-      auto & output_mesh = _app.actionWarehouse().mesh()->getMesh();
+      //auto & output_mesh = _app.actionWarehouse().mesh()->getMesh();
 
       for (const auto & mgn : mg_names)
       {
         const auto & mg = _app.getMeshGenerator(mgn);
-        Moose::out << "Mesh Generator: " << mgn << " " << mg.type() << std::endl;
+        //Moose::out << "Mesh Generator: " << mgn << " " << mg.type() << std::endl;
 
         if (mg.type() == "CoreMeshGenerator")
         {
@@ -88,4 +88,18 @@ void
 MonteCarloGeomAction::makePinMeshJSON(std::string mesh_generator_name)
 {
   const auto & mg = _app.getMeshGenerator(mesh_generator_name);
+
+  // get prefix for all data
+  auto & pin_type = mg.getParam<subdomain_id_type>("pin_type");
+  bool is_assem = mg.getParam<bool>("use_as_assembly");
+  std::string mg_struct = is_assem ? "assembly" : "pin";
+  std::string prefix = mg_struct + "_" + std::to_string(pin_type);
+
+  // get data
+  Real pitch = getMeshProperty<Real>(prefix + "_pitch", mesh_generator_name);
+
+  Moose::out << "pin pitch for " << mesh_generator_name << " : " << pin_name << " " << pitch << std::endl;
+
+  // mg.hasMeshProperty(str)
+  // mg.getMeshProperty(str)
 }
