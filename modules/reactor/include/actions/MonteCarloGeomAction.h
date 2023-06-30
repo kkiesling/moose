@@ -11,10 +11,10 @@
 
 #include "Action.h"
 
-class AddMonteCarloGeomAction : public Action
+class MonteCarloGeomAction : public Action
 {
 public:
-  AddMonteCarloGeomAction(const InputParameters & params);
+  MonteCarloGeomAction(const InputParameters & params);
 
   static InputParameters validParams();
 
