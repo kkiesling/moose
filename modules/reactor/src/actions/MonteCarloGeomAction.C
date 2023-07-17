@@ -11,7 +11,6 @@
 #include "ReactorGeometryMeshBuilderBase.h"
 #include "ReactorMeshParams.h"
 #include "MeshGenerator.h"
-#include "nlohmann/json.h"
 
 registerMooseAction("ReactorApp", MonteCarloGeomAction, "make_mc");
 
@@ -32,10 +31,12 @@ MonteCarloGeomAction::act()
     // find ReactorMeshParams input and check if generate_mc_geometry is true
     bool make_mc = false;
     std::vector<std::string> mg_names = _app.getMeshGeneratorNames();
+    std::string rpm_name;
     for (const auto & mgn : mg_names)
     {
       const auto & mg = _app.getMeshGenerator(mgn);
       if (mg.type() == "ReactorMeshParams"){
+        rpm_name = mgn;
         make_mc = mg.isParamValid("generate_mc_geometry") ? mg.getParam<bool>("generate_mc_geometry") : false;
         break;
       }
@@ -48,6 +49,9 @@ MonteCarloGeomAction::act()
       Moose::out << "We are making the Titan input" << std::endl;
       //auto & output_mesh = _app.actionWarehouse().mesh()->getMesh();
 
+      // get list of units
+      std::vector<nlohmann::json> units;
+
       for (const auto & mgn : mg_names)
       {
         const auto & mg = _app.getMeshGenerator(mgn);
@@ -55,31 +59,34 @@ MonteCarloGeomAction::act()
 
         if (mg.type() == "CoreMeshGenerator")
         {
-          makeCoreMeshJSON(mgn);
+          makeCoreMeshJSON(mgn, rpm_name);
         }
         else if (mg.type() == "AssemblyMeshGenerator")
         {
-          makeAssemblyMeshJSON(mgn);
+          units.push_back(makeAssemblyMeshJSON(mgn, rpm_name));
         }
         else if (mg.type() == "PinMeshGenerator")
         {
-          makePinMeshJSON(mgn); // if use as assembly, then need to call assembly
+          units.push_back(makePinMeshJSON(mgn, rpm_name));
         }
-
       }
-    }
 
+    nlohmann::json titan_inp;
+    titan_inp["units"] = units;
+    Moose::out << titan_inp.dump(4) << std::endl;
+
+    }
   }
 }
 
 void
-MonteCarloGeomAction::makeCoreMeshJSON(std::string mesh_generator_name)
+MonteCarloGeomAction::makeCoreMeshJSON(std::string mesh_generator_name, std::string rpm_name)
 {
   //const auto & mg = _app.getMeshGenerator(mesh_generator_name);
 }
 
-void
-MonteCarloGeomAction::makeAssemblyMeshJSON(std::string mesh_generator_name)
+nlohmann::json
+MonteCarloGeomAction::makeAssemblyMeshJSON(std::string mesh_generator_name, std::string rpm_name)
 {
   //const auto & mg = _app.getMeshGenerator(mesh_generator_name);
   nlohmann::json titan_inp;
@@ -150,35 +157,95 @@ MonteCarloGeomAction::makeAssemblyMeshJSON(std::string mesh_generator_name)
     // create the actual assembly which is the combo of any lattice and duct regions
     // name for the full assembly is mesh_generator_name with no suffixes
 
-    Moose::out << titan_inp.dump(4) << std::endl;
-
+    //Moose::out << titan_inp.dump(4) << std::endl;
   }
+  else{
+    // get single_pin assembly info
+  }
+  return titan_inp;
 
 }
 
-void
-MonteCarloGeomAction::makePinMeshJSON(std::string mesh_generator_name)
+nlohmann::json
+MonteCarloGeomAction::makePinMeshJSON(std::string mesh_generator_name, std::string rpm_name)
 {
+  const auto is_single_pin = getMeshProperty<bool>(RGMB::is_single_pin, mesh_generator_name);
+  if (is_single_pin)
+  {
+    // call assembly generator instead
+    return makeAssemblyMeshJSON(mesh_generator_name, rpm_name);
+  }
+
   //const auto & mg = _app.getMeshGenerator(mesh_generator_name);
+
   nlohmann::json titan_inp;
+
+  // determine if 2d or 3d (extruded for 3d)
+  // get some basic parameters for entire geometry from RMP
+  int geom_dim = getMeshProperty<int>(RGMB::mesh_dimensions, rpm_name);
+  std::string geom_type;
+  std::vector<Real> axial_heights;
+  if (geom_dim == 3)
+  {
+    geom_type = "EXTRUDED_PIN";
+    axial_heights = getMeshProperty<std::vector<Real>>(RGMB::axial_mesh_sizes, rpm_name);
+  }
+  else
+  {
+    geom_type = "PIN";
+  }
 
   // get the ring radii and create the pin/material list
   const auto radii = getMeshProperty<std::vector<Real>>(RGMB::ring_radii, mesh_generator_name);
-  if (radii.size() > 0)
+
+  // get all axial regions
+  const auto ring_region_ids = getMeshProperty<std::vector<std::vector<unsigned short>>>(RGMB::ring_region_ids, mesh_generator_name);
+
+  // iterate over each axial region and make extruded pin for each
+  int ax_id = 0;
+  std::vector<std::pair<std::string, Real>> axial_stack; // list of axial region names to compile into axial stack
+  for (auto & ax_reg : ring_region_ids)
   {
-    int i = 0;  // index for material name placeholder for each region
+    // get the radial regions
     std::vector<std::pair<std::string, Real>> radii_list;
-    for(auto & r : radii)
+    int rad_id = 0;
+    for (auto & r : radii)
     {
-      std::string mat_name = mesh_generator_name + "_mat_" + std::to_string(i);
+      // material for this radial region given by the list of ids for this axial region
+      std::string mat_name = "material_" + std::to_string(ax_reg[rad_id]);
       std::pair<std::string, Real> p;
       p.first = mat_name;
       p.second = r;
       radii_list.push_back(p);
-      i = i + 1;
+      rad_id = rad_id + 1;
     }
-    titan_inp[mesh_generator_name] = {"PIN", radii_list};
+
+    // create this axial unit made of the above radial regions
+    std::string unit_name;
+    if (geom_dim == 3)
+    {
+      // get height from axial heights list and name region accordingly
+      unit_name = mesh_generator_name + "_axial_" + std::to_string(ax_id);
+      std::pair<std::string, Real> p;
+      p.first = unit_name;
+      p.second = axial_heights[ax_id];
+      axial_stack.push_back(p);
+    }
+    else
+    {
+      unit_name = mesh_generator_name;
+    }
+    titan_inp[unit_name] = radii_list;
+    ax_id = ax_id + 1;
   }
 
-  Moose::out << titan_inp.dump(4) << std::endl;
+  // if working in 3D create the axial stack
+  if (geom_dim == 3)
+  {
+    titan_inp[mesh_generator_name] = {"AXIAL_STACK", axial_stack};
+  }
+
+  //Moose::out << titan_inp.dump(4) << std::endl;
+
+  return titan_inp;
 }

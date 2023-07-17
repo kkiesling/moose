@@ -10,6 +10,7 @@
 #pragma once
 
 #include "Action.h"
+#include "nlohmann/json.h"
 
 class MonteCarloGeomAction : public Action
 {
@@ -20,7 +21,7 @@ public:
 
   virtual void act() override;
 
-  void makeCoreMeshJSON(std::string mesh_generator_name);
-  void makeAssemblyMeshJSON(std::string mesh_generator_name);
-  void makePinMeshJSON(std::string mesh_generator_name);
+  void makeCoreMeshJSON(std::string mesh_generator_name, std::string rpm_name);
+  nlohmann::json makeAssemblyMeshJSON(std::string mesh_generator_name, std::string rpm_name);
+  nlohmann::json makePinMeshJSON(std::string mesh_generator_name, std::string rpm_name);
 };
