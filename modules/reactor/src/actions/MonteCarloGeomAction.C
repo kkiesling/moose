@@ -11,7 +11,7 @@
 #include "ReactorGeometryMeshBuilderBase.h"
 #include "ReactorMeshParams.h"
 #include "MeshGenerator.h"
-#include "MooseObjectAction.h"
+#include "nlohmann/json.h"
 
 registerMooseAction("ReactorApp", MonteCarloGeomAction, "make_mc");
 
@@ -89,17 +89,25 @@ MonteCarloGeomAction::makePinMeshJSON(std::string mesh_generator_name)
 {
   const auto & mg = _app.getMeshGenerator(mesh_generator_name);
 
-  // get prefix for all data
-  auto & pin_type = mg.getParam<subdomain_id_type>("pin_type");
-  bool is_assem = mg.getParam<bool>("use_as_assembly");
-  std::string mg_struct = is_assem ? "assembly" : "pin";
-  std::string prefix = mg_struct + "_" + std::to_string(pin_type);
+  nlohmann::json titan_inp;
 
-  // get data
-  Real pitch = getMeshProperty<Real>(prefix + "_pitch", mesh_generator_name);
+  // get the ring radii and create the pin/material list
+  const auto radii = getMeshProperty<std::vector<Real>>(RGMB::ring_radii, mesh_generator_name);
+  if (radii.size() > 0)
+  {
+    int i = 0;  // index for material name placeholder for each region
+    std::vector<std::pair<std::string, Real>> radii_list;
+    for(auto & r : radii)
+    {
+      std::string mat_name = mesh_generator_name + "_mat_" + std::to_string(i);
+      std::pair<std::string, Real> p;
+      p.first = mat_name;
+      p.second = r;
+      radii_list.push_back(p);
+      i = i + 1;
+    }
+    titan_inp[mesh_generator_name] = {"PIN", radii_list};
+  }
 
-  Moose::out << "pin pitch for " << mesh_generator_name << " : " << prefix << " " << pitch << std::endl;
-
-  // mg.hasMeshProperty(str)
-  // mg.getMeshProperty(str)
+  Moose::out << titan_inp.dump(4) << std::endl;
 }
