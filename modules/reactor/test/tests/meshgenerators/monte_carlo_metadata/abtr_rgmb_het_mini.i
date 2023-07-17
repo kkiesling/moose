@@ -62,7 +62,7 @@ mid_control_empty = 12
     top_boundary_id = 201
     bottom_boundary_id = 202
     radial_boundary_id = 203
-    generate_rgmb_metadata = true
+    #generate_rgmb_metadata = true
     generate_mc_geometry = true
   []
 
@@ -80,7 +80,7 @@ mid_control_empty = 12
                   ${mid_upper_na_plen}  ${mid_upper_na_plen}  ${mid_upper_na_plen};
                   ${mid_upper_gas_plen} ${mid_upper_gas_plen} ${mid_upper_gas_plen}' # Fuel, cladding, background
     quad_center_elements = false
-    #show_rgmb_metadata = true
+    show_rgmb_metadata = true
   []
   # Define fuel assemblies
   [fuel_assembly_1]
@@ -112,7 +112,7 @@ mid_control_empty = 12
              0 0 0 0 0 0 0 0 0 0 0;
               0 0 0 0 0 0 0 0 0 0;
                0 0 0 0 0 0 0 0 0'
-    #show_rgmb_metadata = true
+    show_rgmb_metadata = true
   []
 
   # Define constituent pin of control assembly
@@ -129,7 +129,7 @@ mid_control_empty = 12
                   ${mid_b4c}            ${mid_ht9}            ${mid_sodium};
                   ${mid_b4c}            ${mid_ht9}            ${mid_sodium};'     # Fuel, cladding, background
     quad_center_elements = false
-    #show_rgmb_metadata = true
+    show_rgmb_metadata = true
   []
   # Define control assembly
   [control_assembly]
@@ -156,7 +156,7 @@ mid_control_empty = 12
              0 0 0 0 0 0 0 0;
               0 0 0 0 0 0 0;
                0 0 0 0 0 0'
-    #show_rgmb_metadata = true
+    show_rgmb_metadata = true
   []
 
   # Define homogenized reflector and shielding assemblies
@@ -173,7 +173,7 @@ mid_control_empty = 12
                   ${mid_rad_refl}' # Background
     use_as_assembly = true
     quad_center_elements = false
-    #show_rgmb_metadata = true
+    show_rgmb_metadata = true
   []
   # Define core
   [core]
