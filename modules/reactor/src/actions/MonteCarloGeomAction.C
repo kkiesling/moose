@@ -235,7 +235,7 @@ MonteCarloGeomAction::makePinMeshJSON(std::string mesh_generator_name, std::stri
     {
       unit_name = mesh_generator_name;
     }
-    titan_inp[unit_name] = radii_list;
+    titan_inp[unit_name] = {geom_type, radii_list};
     ax_id = ax_id + 1;
   }
 
@@ -244,8 +244,6 @@ MonteCarloGeomAction::makePinMeshJSON(std::string mesh_generator_name, std::stri
   {
     titan_inp[mesh_generator_name] = {"AXIAL_STACK", axial_stack};
   }
-
-  //Moose::out << titan_inp.dump(4) << std::endl;
 
   return titan_inp;
 }
