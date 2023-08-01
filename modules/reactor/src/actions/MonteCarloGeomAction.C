@@ -32,12 +32,32 @@ MonteCarloGeomAction::act()
     bool make_mc = false;
     std::vector<std::string> mg_names = _app.getMeshGeneratorNames();
     std::string rpm_name;
+    std::string final_mgn;
     for (const auto & mgn : mg_names)
     {
       const auto & mg = _app.getMeshGenerator(mgn);
       if (mg.type() == "ReactorMeshParams"){
         rpm_name = mgn;
-        make_mc = mg.isParamValid("generate_mc_geometry") ? mg.getParam<bool>("generate_mc_geometry") : false;
+        if (mg.isParamValid("mc_geometry"))
+        {
+          final_mgn = mg.getParam<std::string>("mc_geometry");
+          const auto & final_mg = _app.getMeshGenerator(final_mgn);
+          // check that mg is of correct type
+          if ((final_mg.type() == "CoreMeshGenerator")
+            || (final_mg.type() == "AssemblyMeshGenerator")
+            || (final_mg.type() == "PinMeshGenerator"))
+          {
+            make_mc = true;
+          }
+          else
+          {
+            make_mc = false;
+            mooseError("Monte Carlo CSG geometry requested for " + final_mgn + " which is not of type CoreMeshGenerator, AssemblyMeshGenerator, or PinMeshGenerator.");
+          }
+        }
+        else{
+          make_mc = false;
+        }
         break;
       }
     }
@@ -47,27 +67,32 @@ MonteCarloGeomAction::act()
     {
       // make the titan input
       Moose::out << "We are making the Titan input" << std::endl;
-      //auto & output_mesh = _app.actionWarehouse().mesh()->getMesh();
 
-      // get list of units
+      // gather list of units
       std::vector<nlohmann::json> units;
+
+      // final mesh generator to use
+      const auto & final_mg = _app.getMeshGenerator(final_mgn);
 
       for (const auto & mgn : mg_names)
       {
-        const auto & mg = _app.getMeshGenerator(mgn);
-        //Moose::out << "Mesh Generator: " << mgn << " " << mg.type() << std::endl;
-
-        if (mg.type() == "CoreMeshGenerator")
+        // only generate inputs for mesh generators that are parents
+        // to the final requested
+        if (final_mg.isParentMeshGenerator(mgn, false) || (mgn == final_mgn))
         {
-          makeCoreMeshJSON(mgn, rpm_name);
-        }
-        else if (mg.type() == "AssemblyMeshGenerator")
-        {
-          units.push_back(makeAssemblyMeshJSON(mgn, rpm_name));
-        }
-        else if (mg.type() == "PinMeshGenerator")
-        {
-          units.push_back(makePinMeshJSON(mgn, rpm_name));
+          const auto & mg = _app.getMeshGenerator(mgn);
+          if (mg.type() == "CoreMeshGenerator")
+          {
+            makeCoreMeshJSON(mgn, rpm_name);
+          }
+          else if (mg.type() == "AssemblyMeshGenerator")
+          {
+            units.push_back(makeAssemblyMeshJSON(mgn, rpm_name));
+          }
+          else if (mg.type() == "PinMeshGenerator")
+          {
+            units.push_back(makePinMeshJSON(mgn, rpm_name));
+          }
         }
       }
 

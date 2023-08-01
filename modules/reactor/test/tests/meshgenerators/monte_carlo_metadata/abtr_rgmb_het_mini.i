@@ -63,7 +63,7 @@ mid_control_empty = 12
     bottom_boundary_id = 202
     radial_boundary_id = 203
     #generate_rgmb_metadata = true
-    generate_mc_geometry = true
+    mc_geometry = fuel_assembly_1
   []
 
   # Define constituent pins of fuel assemblies
@@ -189,11 +189,6 @@ mid_control_empty = 12
     show_rgmb_metadata = true
   []
 []
-
-
-# [MonteCarloGeom]
-#     make_mc = true
-# []
 
 [Debug]
   show_actions = true
