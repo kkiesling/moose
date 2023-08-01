@@ -239,18 +239,18 @@ MonteCarloGeomAction::makeAssemblyMeshJSON(std::string mesh_generator_name, std:
       }
 
       // iterate over duct regions (assume half pitches are in ascending order)
-      int duct_id = 0;
       const auto duct_halfpitches = getMeshProperty<std::vector<Real>>(RGMB::duct_halfpitches, mesh_generator_name);
       const auto duct_region_ids = getMeshProperty<std::vector<std::vector<unsigned short>>>(RGMB::duct_region_ids, mesh_generator_name);
       Real max_pitch = *std::max_element(duct_halfpitches.begin(), duct_halfpitches.end());
 
+      // reset the axial stack and use the nested ducted regions for the stack instead
+      axial_stack.clear() ;
+
       int ax_id = 0;
       for (auto & ax_reg : duct_region_ids)
       {
-        // reset the axial stack and use the nested ducted regions for the stack instead
-        axial_stack.clear() ;
-
         std::string last_unit_name;
+        int duct_id = 0;
         for (auto & hp : duct_halfpitches)
         {
           std::string material = "material_" + std::to_string(ax_reg[duct_id]);
