@@ -83,7 +83,7 @@ MonteCarloGeomAction::act()
           const auto & mg = _app.getMeshGenerator(mgn);
           if (mg.type() == "CoreMeshGenerator")
           {
-            makeCoreMeshJSON(mgn, rpm_name);
+            units.push_back(makeCoreMeshJSON(mgn, rpm_name));
           }
           else if (mg.type() == "AssemblyMeshGenerator")
           {
@@ -104,16 +104,100 @@ MonteCarloGeomAction::act()
   }
 }
 
-void
+nlohmann::json
 MonteCarloGeomAction::makeCoreMeshJSON(std::string mesh_generator_name, std::string rpm_name)
 {
-  //const auto & mg = _app.getMeshGenerator(mesh_generator_name);
+  nlohmann::json titan_inp;
+
+  // get assembly lattice
+  const auto assembly_lattice =
+      getMeshProperty<std::vector<std::vector<int>>>(RGMB::assembly_lattice, mesh_generator_name);
+  const auto assembly_names =
+      getMeshProperty<std::vector<std::string>>(RGMB::assembly_names, mesh_generator_name);
+
+  // check if square or hex lattice and get dimension
+  std::string lat_type;
+  int dimension;
+  std::string dim_type;
+  if (assembly_lattice[0].size() == assembly_lattice[1].size())
+  {
+    lat_type = "SQUARE_MAP";
+    dimension = assembly_lattice[0].size();
+    dim_type = "dim";
+  }
+  else
+  {
+    lat_type = "HEX_MAP";
+    dimension = assembly_lattice.size() / 2 + 1; // integer division
+    dim_type = "num_rings";
+  }
+
+  bool make_null = false;
+  std::vector<std::vector<std::string>> elements;
+  for (auto & assem_list : assembly_lattice)
+  {
+  std::vector<std::string> ele_list; // ring or row element fills
+  for (auto & assem_id : assem_list)
+  {
+    std::string assem_name;
+    if (assem_id == -1)
+    {
+      assem_name = "null_assembly";
+      make_null = true;
+    }
+    else{
+      assem_name = assembly_names[assem_id];
+    }
+    ele_list.push_back(assem_name);
+  }
+  elements.push_back(ele_list);
+  }
+
+  // get set of pitches, if more than one pitch, issue warning and use largest
+  std::vector<Real> pitches;
+  for (auto & assem_name : assembly_names)
+  {
+  // get pitch associated with assembly
+  const auto assem_pitch = getMeshProperty<Real>(RGMB::pitch, assem_name);
+  pitches.push_back(assem_pitch);
+  }
+  std::set<Real> set_pitches(pitches.begin(), pitches.end());
+  Real max_pitch = *std::max_element(pitches.begin(), pitches.end());
+  if (set_pitches.size() > 1)
+  {
+  mooseWarning(mesh_generator_name + " has " + std::to_string(set_pitches.size()) +
+                " associated with the lattice. Using largest: " + std::to_string(max_pitch));
+  }
+
+  // form lattice
+  titan_inp[mesh_generator_name] = {lat_type,
+                          {{dim_type, dimension},
+                            {"pitch", max_pitch},
+                            {"fill", "void"},
+                            {"elements", elements}}};
+
+  // if lattice has dummy assembly, make a dummy assembly
+  if (make_null)
+  {
+    int num_sides;
+    if (lat_type == "HEX_MAP")
+    {
+      num_sides = 6;
+    }
+    else
+    {
+      num_sides = 4;
+    }
+
+    titan_inp["null_assembly"] = {"POLYGON_DOMAIN", "void", {num_sides, max_pitch / 2.0}};
+  }
+
+  return titan_inp;
 }
 
 nlohmann::json
 MonteCarloGeomAction::makeAssemblyMeshJSON(std::string mesh_generator_name, std::string rpm_name)
 {
-  //const auto & mg = _app.getMeshGenerator(mesh_generator_name);
   nlohmann::json titan_inp;
 
   const auto is_single_pin = getMeshProperty<bool>(RGMB::is_single_pin, mesh_generator_name);
@@ -338,8 +422,6 @@ MonteCarloGeomAction::makePinMeshJSON(std::string mesh_generator_name, std::stri
     // call assembly generator instead
     return makeAssemblyMeshJSON(mesh_generator_name, rpm_name);
   }
-
-  //const auto & mg = _app.getMeshGenerator(mesh_generator_name);
 
   nlohmann::json titan_inp;
 

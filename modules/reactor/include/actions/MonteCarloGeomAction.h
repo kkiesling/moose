@@ -21,7 +21,7 @@ public:
 
   virtual void act() override;
 
-  void makeCoreMeshJSON(std::string mesh_generator_name, std::string rpm_name);
+  nlohmann::json makeCoreMeshJSON(std::string mesh_generator_name, std::string rpm_name);
   nlohmann::json makeAssemblyMeshJSON(std::string mesh_generator_name, std::string rpm_name);
   nlohmann::json makePinMeshJSON(std::string mesh_generator_name, std::string rpm_name);
 };
