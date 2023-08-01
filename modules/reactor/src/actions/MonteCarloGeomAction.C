@@ -214,6 +214,8 @@ MonteCarloGeomAction::makeAssemblyMeshJSON(std::string mesh_generator_name, std:
 
   // determine if 3d or 2d geom and get axial heights
   int geom_dim = getMeshProperty<int>(RGMB::mesh_dimensions, rpm_name);
+  const auto geom_mesh_type = getMeshProperty<std::string>(RGMB::mesh_geometry, rpm_name);
+
   std::vector<Real> axial_heights;
   if (geom_dim == 3)
   {
@@ -232,17 +234,17 @@ MonteCarloGeomAction::makeAssemblyMeshJSON(std::string mesh_generator_name, std:
     std::string lat_type;
     int dimension;
     std::string dim_type;
-    if (pin_lattice[0].size() == pin_lattice[1].size())
-    {
-      lat_type = "SQUARE_MAP";
-      dimension = pin_lattice[0].size();
-      dim_type = "dim";
-    }
-    else
+    if (geom_mesh_type == "Hex")
     {
       lat_type = "HEX_MAP";
       dimension = pin_lattice.size() / 2 + 1; // integer division
       dim_type = "num_rings";
+    }
+    else
+    {
+      lat_type = "SQUARE_MAP";
+      dimension = pin_lattice[0].size();
+      dim_type = "dim";
     }
 
     // iterate over each axial region and make lattice for each
@@ -324,7 +326,7 @@ MonteCarloGeomAction::makeAssemblyMeshJSON(std::string mesh_generator_name, std:
     if (hasMeshProperty(RGMB::duct_halfpitches, mesh_generator_name))
     {
       int num_sides;
-      if (lat_type == "HEX_MAP")
+      if (geom_mesh_type == "Hex")
       {
         num_sides = 6;
       }
@@ -426,73 +428,125 @@ MonteCarloGeomAction::makeAssemblyMeshJSON(std::string mesh_generator_name, std:
 nlohmann::json
 MonteCarloGeomAction::makePinMeshJSON(std::string mesh_generator_name, std::string rpm_name)
 {
-  const auto is_single_pin = getMeshProperty<bool>(RGMB::is_single_pin, mesh_generator_name);
-  if (is_single_pin)
-  {
-    // call assembly generator instead
-    return makeAssemblyMeshJSON(mesh_generator_name, rpm_name);
-  }
-
   nlohmann::json titan_inp;
-
-  // determine if 2d or 3d (extruded for 3d)
-  // get some basic parameters for entire geometry from RMP
+  const auto is_single_pin = getMeshProperty<bool>(RGMB::is_single_pin, mesh_generator_name);
   int geom_dim = getMeshProperty<int>(RGMB::mesh_dimensions, rpm_name);
-  std::string geom_type = "PIN";
+  const auto geom_mesh_type = getMeshProperty<std::string>(RGMB::mesh_geometry, rpm_name);
+
   std::vector<Real> axial_heights;
   if (geom_dim == 3)
   {
     axial_heights = getMeshProperty<std::vector<Real>>(RGMB::axial_mesh_sizes, rpm_name);
   }
 
-  // get the ring radii and create the pin/material list
-  const auto radii = getMeshProperty<std::vector<Real>>(RGMB::ring_radii, mesh_generator_name);
 
-  // get all axial regions
-  const auto ring_region_ids = getMeshProperty<std::vector<std::vector<unsigned short>>>(RGMB::ring_region_ids, mesh_generator_name);
-
-  // iterate over each axial region and make extruded pin for each
-  int ax_id = 0;
-  std::vector<std::pair<std::string, Real>> axial_stack; // list of axial region names to compile into axial stack
-  for (auto & ax_reg : ring_region_ids)
+  // make radial pins
+  if (!is_single_pin)
   {
-    // get the radial regions
-    std::vector<std::pair<std::string, Real>> radii_list;
-    int rad_id = 0;
-    for (auto & r : radii)
+    // determine if 2d or 3d (extruded for 3d)
+    // get some basic parameters for entire geometry from RMP
+    std::string geom_type = "PIN";
+
+
+    // get the ring radii and create the pin/material list
+    const auto radii = getMeshProperty<std::vector<Real>>(RGMB::ring_radii, mesh_generator_name);
+
+    // get all axial regions
+    const auto ring_region_ids = getMeshProperty<std::vector<std::vector<unsigned short>>>(RGMB::ring_region_ids, mesh_generator_name);
+
+    // iterate over each axial region and make extruded pin for each
+    int ax_id = 0;
+    std::vector<std::pair<std::string, Real>> axial_stack; // list of axial region names to compile into axial stack
+    for (auto & ax_reg : ring_region_ids)
     {
-      // material for this radial region given by the list of ids for this axial region
-      std::string mat_name = "material_" + std::to_string(ax_reg[rad_id]);
-      std::pair<std::string, Real> p;
-      p.first = mat_name;
-      p.second = r;
-      radii_list.push_back(p);
-      rad_id = rad_id + 1;
+      // get the radial regions
+      std::vector<std::pair<std::string, Real>> radii_list;
+      int rad_id = 0;
+      for (auto & r : radii)
+      {
+        // material for this radial region given by the list of ids for this axial region
+        std::string mat_name = "material_" + std::to_string(ax_reg[rad_id]);
+        std::pair<std::string, Real> p;
+        p.first = mat_name;
+        p.second = r;
+        radii_list.push_back(p);
+        rad_id = rad_id + 1;
+      }
+
+      // create this axial unit made of the above radial regions
+      std::string unit_name;
+      if (geom_dim == 3)
+      {
+        // get height from axial heights list and name region accordingly
+        unit_name = mesh_generator_name + "_axial_" + std::to_string(ax_id);
+        std::pair<std::string, Real> p;
+        p.first = unit_name;
+        p.second = axial_heights[ax_id];
+        axial_stack.push_back(p);
+      }
+      else
+      {
+        unit_name = mesh_generator_name;
+      }
+      titan_inp[unit_name] = {geom_type, radii_list};
+      ax_id = ax_id + 1;
     }
 
-    // create this axial unit made of the above radial regions
-    std::string unit_name;
+    // if working in 3D create the axial stack
     if (geom_dim == 3)
     {
-      // get height from axial heights list and name region accordingly
-      unit_name = mesh_generator_name + "_axial_" + std::to_string(ax_id);
-      std::pair<std::string, Real> p;
-      p.first = unit_name;
-      p.second = axial_heights[ax_id];
-      axial_stack.push_back(p);
+      titan_inp[mesh_generator_name] = {"AXIAL_STACK", axial_stack};
+    }
+  }
+  else{
+    // make a filled assembly
+    int num_sides;
+    if (geom_mesh_type == "Hex")
+    {
+      num_sides = 6;
     }
     else
     {
-      unit_name = mesh_generator_name;
+      num_sides = 4;
     }
-    titan_inp[unit_name] = {geom_type, radii_list};
-    ax_id = ax_id + 1;
-  }
 
-  // if working in 3D create the axial stack
-  if (geom_dim == 3)
-  {
-    titan_inp[mesh_generator_name] = {"AXIAL_STACK", axial_stack};
+    const auto pitch = getMeshProperty<Real>(RGMB::pitch, mesh_generator_name);
+
+    // iterate over each axial region and make lattice for each
+    int ax_id = 0;
+    std::vector<std::pair<std::string, Real>>
+        axial_stack; // list of axial region names to compile into axial stack
+    const auto bg_region_ids = getMeshProperty<std::vector<unsigned short>>(
+        RGMB::background_region_id, mesh_generator_name);
+    for (auto & ax_reg : bg_region_ids)
+    {
+      std::string material = "material_" + std::to_string(ax_reg);
+
+      // get height from axial heights list and name region accordingly
+      std::string unit_name;
+      if (geom_dim == 3)
+      {
+        // get height from axial heights list and name region accordingly
+        unit_name = mesh_generator_name + "_axial_" + std::to_string(ax_id);
+        std::pair<std::string, Real> p;
+        p.first = unit_name;
+        p.second = axial_heights[ax_id];
+        axial_stack.push_back(p);
+      }
+      else
+      {
+        unit_name = mesh_generator_name;
+      }
+
+      // form lattice for this axial region
+      titan_inp[unit_name] = {"POLYGON_DOMAIN", material, {num_sides, pitch / 2.0}};
+      ax_id = ax_id + 1;
+    }
+
+    if (geom_dim == 3)
+    {
+      titan_inp[mesh_generator_name] = {"AXIAL_STACK", axial_stack};
+    }
   }
 
   return titan_inp;
