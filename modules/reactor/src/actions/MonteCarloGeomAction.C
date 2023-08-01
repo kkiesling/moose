@@ -101,6 +101,103 @@ MonteCarloGeomAction::act()
 }
 
 nlohmann::json
+MonteCarloGeomAction::makeLattice(std::string geom_mesh_type,
+                                  std::vector<std::vector<int>> lattice,
+                                  std::vector<std::string> names,
+                                  std::string unit_name,
+                                  std::string fill_name,
+                                  int axial_id)
+{
+  nlohmann::json titan_inp;
+
+  // check if square or hex lattice and get dimension
+  std::string lat_type;
+  int dimension;
+  std::string dim_type;
+  if (geom_mesh_type == "Hex")
+  {
+    lat_type = "HEX_MAP";
+    dimension = lattice.size() / 2 + 1; // integer division
+    dim_type = "num_rings";
+  }
+  else
+  {
+    lat_type = "SQUARE_MAP";
+    dimension = lattice[0].size();
+    dim_type = "dim";
+  }
+
+  // iterate over elements
+  bool make_null = false;
+  std::vector<std::vector<std::string>> elements;
+  for (auto & row_list : lattice)
+  {
+    std::vector<std::string> ele_list; // ring or row element fills
+    for (auto & ele_id : row_list)
+    {
+      std::string ele_name;
+      if (ele_id == -1)
+      {
+          ele_name = unit_name + "_null";
+          make_null = true;
+      }
+      else
+      {
+          ele_name = names[ele_id];
+      }
+      // indicate axial region in name
+      if (axial_id > -1)
+      {
+        ele_name = ele_name + "_axial_" + std::to_string(axial_id);
+      }
+      ele_list.push_back(ele_name);
+      }
+    elements.push_back(ele_list);
+  }
+
+  // get set of pitches, if more than one pitch, issue warning and use largest
+  std::vector<Real> pitches;
+  for (auto & ele_name : names)
+  {
+    // get pitch associated with element
+    const auto assem_pitch = getMeshProperty<Real>(RGMB::pitch, ele_name);
+    pitches.push_back(assem_pitch);
+  }
+  std::set<Real> set_pitches(pitches.begin(), pitches.end());
+  Real max_pitch = *std::max_element(pitches.begin(), pitches.end());
+  if (set_pitches.size() > 1)
+  {
+    mooseWarning(unit_name + " has " + std::to_string(set_pitches.size()) +
+                 " associated with the lattice. Using largest: " + std::to_string(max_pitch));
+  }
+
+  // form lattice
+  titan_inp[unit_name] = {lat_type,
+                          {{dim_type, dimension},
+                          {"pitch", max_pitch},
+                          {"fill", fill_name},
+                          {"elements", elements}}};
+
+  // if lattice has dummy assembly, make a dummy assembly
+  if (make_null)
+  {
+    int num_sides;
+    if (lat_type == "HEX_MAP")
+    {
+    num_sides = 6;
+    }
+    else
+    {
+    num_sides = 4;
+    }
+
+    titan_inp[unit_name + "_null"] = {"POLYGON_DOMAIN", fill_name, {num_sides, max_pitch / 2.0}};
+  }
+
+  return titan_inp;
+}
+
+nlohmann::json
 MonteCarloGeomAction::makeCoreMeshJSON(std::string mesh_generator_name, std::string rpm_name)
 {
   nlohmann::json titan_inp;
@@ -112,82 +209,7 @@ MonteCarloGeomAction::makeCoreMeshJSON(std::string mesh_generator_name, std::str
   const auto assembly_names =
       getMeshProperty<std::vector<std::string>>(RGMB::assembly_names, mesh_generator_name);
 
-  // check if square or hex lattice and get dimension
-  std::string lat_type;
-  int dimension;
-  std::string dim_type;
-  if (geom_mesh_type == "Hex")
-  {
-    lat_type = "HEX_MAP";
-    dimension = assembly_lattice.size() / 2 + 1; // integer division
-    dim_type = "num_rings";
-  }
-  else
-  {
-    lat_type = "SQUARE_MAP";
-    dimension = assembly_lattice[0].size();
-    dim_type = "dim";
-  }
-
-  bool make_null = false;
-  std::vector<std::vector<std::string>> elements;
-  for (auto & assem_list : assembly_lattice)
-  {
-  std::vector<std::string> ele_list; // ring or row element fills
-  for (auto & assem_id : assem_list)
-  {
-    std::string assem_name;
-    if (assem_id == -1)
-    {
-      assem_name = "null_assembly";
-      make_null = true;
-    }
-    else{
-      assem_name = assembly_names[assem_id];
-    }
-    ele_list.push_back(assem_name);
-  }
-  elements.push_back(ele_list);
-  }
-
-  // get set of pitches, if more than one pitch, issue warning and use largest
-  std::vector<Real> pitches;
-  for (auto & assem_name : assembly_names)
-  {
-  // get pitch associated with assembly
-  const auto assem_pitch = getMeshProperty<Real>(RGMB::pitch, assem_name);
-  pitches.push_back(assem_pitch);
-  }
-  std::set<Real> set_pitches(pitches.begin(), pitches.end());
-  Real max_pitch = *std::max_element(pitches.begin(), pitches.end());
-  if (set_pitches.size() > 1)
-  {
-  mooseWarning(mesh_generator_name + " has " + std::to_string(set_pitches.size()) +
-                " associated with the lattice. Using largest: " + std::to_string(max_pitch));
-  }
-
-  // form lattice
-  titan_inp[mesh_generator_name] = {lat_type,
-                          {{dim_type, dimension},
-                            {"pitch", max_pitch},
-                            {"fill", "void"},
-                            {"elements", elements}}};
-
-  // if lattice has dummy assembly, make a dummy assembly
-  if (make_null)
-  {
-    int num_sides;
-    if (lat_type == "HEX_MAP")
-    {
-      num_sides = 6;
-    }
-    else
-    {
-      num_sides = 4;
-    }
-
-    titan_inp["null_assembly"] = {"POLYGON_DOMAIN", "void", {num_sides, max_pitch / 2.0}};
-  }
+  titan_inp = makeLattice(geom_mesh_type, assembly_lattice, assembly_names, mesh_generator_name, "void", -1);
 
   return titan_inp;
 }
@@ -212,23 +234,6 @@ MonteCarloGeomAction::makeAssemblyMeshJSON(std::string mesh_generator_name, std:
   const auto pin_names =
       getMeshProperty<std::vector<std::string>>(RGMB::pin_names, mesh_generator_name);
 
-  // check if square or hex lattice and get dimension
-  std::string lat_type;
-  int dimension;
-  std::string dim_type;
-  if (geom_mesh_type == "Hex")
-  {
-    lat_type = "HEX_MAP";
-    dimension = pin_lattice.size() / 2 + 1; // integer division
-    dim_type = "num_rings";
-  }
-  else
-  {
-    lat_type = "SQUARE_MAP";
-    dimension = pin_lattice[0].size();
-    dim_type = "dim";
-  }
-
   // iterate over each axial region and make lattice for each
   int ax_id = 0;
   std::vector<std::pair<std::string, Real>> axial_stack; // list of axial region names to compile into axial stack
@@ -238,69 +243,29 @@ MonteCarloGeomAction::makeAssemblyMeshJSON(std::string mesh_generator_name, std:
   {
     std::string bg_material = "material_" + std::to_string(ax_reg);
 
-    // convert list of ints to corresponding list of pin names
-    std::vector<std::vector<std::string>> elements;
-    for (auto & pin_list : pin_lattice)
-    {
-      std::vector<std::string> ele_list;  // ring or row element fills
-      for (auto & pin_id : pin_list)
-      {
-        std::string pin_name;
-        if (geom_dim == 3) {
-          // fill with only the corresponding axial region of the pin
-          pin_name = pin_names[pin_id] + "_axial_" + std::to_string(ax_id);
-        }
-        else
-        {
-          pin_name = pin_names[pin_id];
-        }
-        ele_list.push_back(pin_name);
-      }
-      elements.push_back(ele_list);
-    }
-
-    // get set of pitches, if more than one pitch, issue warning and use largest
-    std::vector<Real> pitches;
-    for (auto & pin_name : pin_names)
-    {
-      // get pitch associated with pin
-      const auto pin_pitch = getMeshProperty<Real>(RGMB::pitch, pin_name);
-      pitches.push_back(pin_pitch);
-    }
-    std::set<Real> set_pitches(pitches.begin(), pitches.end());
-    Real max_pitch = *std::max_element(pitches.begin(), pitches.end());
-    if (set_pitches.size() > 1)
-    {
-      mooseWarning(mesh_generator_name + " has " + std::to_string(set_pitches.size())
-        + " associated with the lattice. Using largest: " + std::to_string(max_pitch));
-    }
-
-    // get height from axial heights list and name region accordingly
+    // get unit name
     std::string unit_name;
     if (geom_dim == 3)
     {
-      // get height from axial heights list and name region accordingly
       unit_name = mesh_generator_name + "_lattice_axial_" + std::to_string(ax_id);
-      std::pair<std::string, Real> p;
-      p.first = unit_name;
-      p.second = axial_heights[ax_id];
-      axial_stack.push_back(p);
     }
     else
     {
       unit_name = mesh_generator_name + "_lattice";
     }
 
-    // form lattice for this axial region
-    titan_inp[unit_name] = {
-      lat_type,
-      {
-        {dim_type, dimension},
-        {"pitch", max_pitch},
-        {"fill", bg_material},
-        {"elements", elements}
-      }
-    };
+    // make the lattice
+    titan_inp[unit_name] = makeLattice(geom_mesh_type, pin_lattice, pin_names, unit_name, bg_material, ax_id);
+
+    // get height from axial heights list and name region accordingly
+    if (geom_dim == 3)
+    {
+      // get height from axial heights list and name region accordingly
+      std::pair<std::string, Real> p;
+      p.first = unit_name;
+      p.second = axial_heights[ax_id];
+      axial_stack.push_back(p);
+    }
     ax_id = ax_id + 1;
   }
 
@@ -530,3 +495,4 @@ MonteCarloGeomAction::makePinMeshJSON(std::string mesh_generator_name, std::stri
 
   return titan_inp;
 }
+
