@@ -65,9 +65,6 @@ MonteCarloGeomAction::act()
     // make geometry
     if (make_mc)
     {
-      // make the titan input
-      Moose::out << "We are making the Titan input" << std::endl;
-
       // gather list of units
       nlohmann::json titan_inp;
 
@@ -80,7 +77,6 @@ MonteCarloGeomAction::act()
         // to the final requested
         if (final_mg.isParentMeshGenerator(mgn, false) || (mgn == final_mgn))
         {
-          Moose::out << mgn << std::endl;
           nlohmann::json units;
           const auto & mg = _app.getMeshGenerator(mgn);
           if (mg.type() == "CoreMeshGenerator")
@@ -95,16 +91,6 @@ MonteCarloGeomAction::act()
           {
             titan_inp["units"].update(makePinMeshJSON(mgn, rpm_name));
           }
-
-          // add intermediate units list to the existing units list
-          // if (titan_inp.is_null())
-          // {
-          //   titan_inp["units"] = units;
-          // }
-          // else
-          // {
-          //   titan_inp["units"].update(units);
-          // }
         }
       }
 
@@ -118,6 +104,7 @@ nlohmann::json
 MonteCarloGeomAction::makeCoreMeshJSON(std::string mesh_generator_name, std::string rpm_name)
 {
   nlohmann::json titan_inp;
+  const auto geom_mesh_type = getMeshProperty<std::string>(RGMB::mesh_geometry, rpm_name);
 
   // get assembly lattice
   const auto assembly_lattice =
@@ -129,17 +116,17 @@ MonteCarloGeomAction::makeCoreMeshJSON(std::string mesh_generator_name, std::str
   std::string lat_type;
   int dimension;
   std::string dim_type;
-  if (assembly_lattice[0].size() == assembly_lattice[1].size())
-  {
-    lat_type = "SQUARE_MAP";
-    dimension = assembly_lattice[0].size();
-    dim_type = "dim";
-  }
-  else
+  if (geom_mesh_type == "Hex")
   {
     lat_type = "HEX_MAP";
     dimension = assembly_lattice.size() / 2 + 1; // integer division
     dim_type = "num_rings";
+  }
+  else
+  {
+    lat_type = "SQUARE_MAP";
+    dimension = assembly_lattice[0].size();
+    dim_type = "dim";
   }
 
   bool make_null = false;
@@ -210,219 +197,211 @@ MonteCarloGeomAction::makeAssemblyMeshJSON(std::string mesh_generator_name, std:
 {
   nlohmann::json titan_inp;
 
-  const auto is_single_pin = getMeshProperty<bool>(RGMB::is_single_pin, mesh_generator_name);
-
   // determine if 3d or 2d geom and get axial heights
   int geom_dim = getMeshProperty<int>(RGMB::mesh_dimensions, rpm_name);
   const auto geom_mesh_type = getMeshProperty<std::string>(RGMB::mesh_geometry, rpm_name);
-
   std::vector<Real> axial_heights;
   if (geom_dim == 3)
   {
     axial_heights = getMeshProperty<std::vector<Real>>(RGMB::axial_mesh_sizes, rpm_name);
   }
 
-  if  (!is_single_pin)
-  {
-    // get pin lattice
-    const auto pin_lattice =
-        getMeshProperty<std::vector<std::vector<int>>>(RGMB::pin_lattice, mesh_generator_name);
-    const auto pin_names =
-        getMeshProperty<std::vector<std::string>>(RGMB::pin_names, mesh_generator_name);
+  // get pin lattice
+  const auto pin_lattice =
+      getMeshProperty<std::vector<std::vector<int>>>(RGMB::pin_lattice, mesh_generator_name);
+  const auto pin_names =
+      getMeshProperty<std::vector<std::string>>(RGMB::pin_names, mesh_generator_name);
 
-    // check if square or hex lattice and get dimension
-    std::string lat_type;
-    int dimension;
-    std::string dim_type;
-    if (geom_mesh_type == "Hex")
+  // check if square or hex lattice and get dimension
+  std::string lat_type;
+  int dimension;
+  std::string dim_type;
+  if (geom_mesh_type == "Hex")
+  {
+    lat_type = "HEX_MAP";
+    dimension = pin_lattice.size() / 2 + 1; // integer division
+    dim_type = "num_rings";
+  }
+  else
+  {
+    lat_type = "SQUARE_MAP";
+    dimension = pin_lattice[0].size();
+    dim_type = "dim";
+  }
+
+  // iterate over each axial region and make lattice for each
+  int ax_id = 0;
+  std::vector<std::pair<std::string, Real>> axial_stack; // list of axial region names to compile into axial stack
+  const auto bg_region_ids = getMeshProperty<std::vector<unsigned short>>(
+      RGMB::background_region_id, mesh_generator_name);
+  for (auto & ax_reg : bg_region_ids)
+  {
+    std::string bg_material = "material_" + std::to_string(ax_reg);
+
+    // convert list of ints to corresponding list of pin names
+    std::vector<std::vector<std::string>> elements;
+    for (auto & pin_list : pin_lattice)
     {
-      lat_type = "HEX_MAP";
-      dimension = pin_lattice.size() / 2 + 1; // integer division
-      dim_type = "num_rings";
+      std::vector<std::string> ele_list;  // ring or row element fills
+      for (auto & pin_id : pin_list)
+      {
+        std::string pin_name;
+        if (geom_dim == 3) {
+          // fill with only the corresponding axial region of the pin
+          pin_name = pin_names[pin_id] + "_axial_" + std::to_string(ax_id);
+        }
+        else
+        {
+          pin_name = pin_names[pin_id];
+        }
+        ele_list.push_back(pin_name);
+      }
+      elements.push_back(ele_list);
+    }
+
+    // get set of pitches, if more than one pitch, issue warning and use largest
+    std::vector<Real> pitches;
+    for (auto & pin_name : pin_names)
+    {
+      // get pitch associated with pin
+      const auto pin_pitch = getMeshProperty<Real>(RGMB::pitch, pin_name);
+      pitches.push_back(pin_pitch);
+    }
+    std::set<Real> set_pitches(pitches.begin(), pitches.end());
+    Real max_pitch = *std::max_element(pitches.begin(), pitches.end());
+    if (set_pitches.size() > 1)
+    {
+      mooseWarning(mesh_generator_name + " has " + std::to_string(set_pitches.size())
+        + " associated with the lattice. Using largest: " + std::to_string(max_pitch));
+    }
+
+    // get height from axial heights list and name region accordingly
+    std::string unit_name;
+    if (geom_dim == 3)
+    {
+      // get height from axial heights list and name region accordingly
+      unit_name = mesh_generator_name + "_lattice_axial_" + std::to_string(ax_id);
+      std::pair<std::string, Real> p;
+      p.first = unit_name;
+      p.second = axial_heights[ax_id];
+      axial_stack.push_back(p);
     }
     else
     {
-      lat_type = "SQUARE_MAP";
-      dimension = pin_lattice[0].size();
-      dim_type = "dim";
+      unit_name = mesh_generator_name + "_lattice";
     }
 
-    // iterate over each axial region and make lattice for each
-    int ax_id = 0;
-    std::vector<std::pair<std::string, Real>> axial_stack; // list of axial region names to compile into axial stack
-    const auto bg_region_ids = getMeshProperty<std::vector<unsigned short>>(
-        RGMB::background_region_id, mesh_generator_name);
-    for (auto & ax_reg : bg_region_ids)
+    // form lattice for this axial region
+    titan_inp[unit_name] = {
+      lat_type,
+      {
+        {dim_type, dimension},
+        {"pitch", max_pitch},
+        {"fill", bg_material},
+        {"elements", elements}
+      }
+    };
+    ax_id = ax_id + 1;
+  }
+
+  // get any duct regions and insert them into each other
+  if (hasMeshProperty(RGMB::duct_halfpitches, mesh_generator_name))
+  {
+    int num_sides;
+    if (geom_mesh_type == "Hex")
     {
-      std::string bg_material = "material_" + std::to_string(ax_reg);
+      num_sides = 6;
+    }
+    else{
+      num_sides = 4;
+    }
 
-      // convert list of ints to corresponding list of pin names
-      std::vector<std::vector<std::string>> elements;
-      for (auto & pin_list : pin_lattice)
+    // iterate over duct regions (assume half pitches are in ascending order)
+    const auto duct_halfpitches = getMeshProperty<std::vector<Real>>(RGMB::duct_halfpitches, mesh_generator_name);
+    const auto duct_region_ids = getMeshProperty<std::vector<std::vector<unsigned short>>>(RGMB::duct_region_ids, mesh_generator_name);
+    Real max_pitch = *std::max_element(duct_halfpitches.begin(), duct_halfpitches.end());
+
+    // reset the axial stack and use the nested ducted regions for the stack instead
+    axial_stack.clear() ;
+
+    int ax_id = 0;
+    for (auto & ax_reg : duct_region_ids)
+    {
+      std::string last_unit_name;
+      int duct_id = 0;
+      for (auto & hp : duct_halfpitches)
       {
-        std::vector<std::string> ele_list;  // ring or row element fills
-        for (auto & pin_id : pin_list)
+        std::string material = "material_" + std::to_string(ax_reg[duct_id]);
+
+        // if we are working with the outermost ducted region and geometry is 2D,
+        // then the unit name is the mesh generator name
+        std::string unit_name;
+        if ((hp == max_pitch) && (geom_dim == 2))
         {
-          std::string pin_name;
-          if (geom_dim == 3) {
-            // fill with only the corresponding axial region of the pin
-            pin_name = pin_names[pin_id] + "_axial_" + std::to_string(ax_id);
-          }
-          else
-          {
-            pin_name = pin_names[pin_id];
-          }
-          ele_list.push_back(pin_name);
+          unit_name = mesh_generator_name;
         }
-        elements.push_back(ele_list);
+        else
+        {
+          // define base name by ducted region
+          unit_name = mesh_generator_name + "_duct_" + std::to_string(duct_id);
+        }
+
+        // add axial region to name if 3d
+        if (geom_dim == 3)
+        {
+          unit_name =  unit_name + "_axial_" + std::to_string(ax_id);
+        }
+
+        // get "inserts" for the polygon
+        std::vector<std::string> inserts;
+        std::string name_insert ;
+        if (duct_id == 0)
+        {
+          // insert pin lattice for inner-most
+          name_insert = mesh_generator_name + "_lattice";
+        }
+        else
+        {
+          // insert previous ducted region for all other regions
+          name_insert = mesh_generator_name + "_duct_" + std::to_string(duct_id - 1);
+
+        }
+
+        // if 3d append axial id
+        if (geom_dim == 3){
+          name_insert = name_insert + "_axial_" + std::to_string(ax_id);
+        }
+
+        // make the polygon with appropriate inserts
+        inserts.push_back(name_insert);
+        titan_inp[unit_name] = {"POLYGON_DOMAIN", material, {num_sides, hp}, {"inserts", inserts}};
+
+        // record last radial region and use this as the stack info
+        last_unit_name = unit_name;
+
+        duct_id = duct_id + 1;
       }
 
-      // get set of pitches, if more than one pitch, issue warning and use largest
-      std::vector<Real> pitches;
-      for (auto & pin_name : pin_names)
-      {
-        // get pitch associated with pin
-        const auto pin_pitch = getMeshProperty<Real>(RGMB::pitch, pin_name);
-        pitches.push_back(pin_pitch);
-      }
-      std::set<Real> set_pitches(pitches.begin(), pitches.end());
-      Real max_pitch = *std::max_element(pitches.begin(), pitches.end());
-      if (set_pitches.size() > 1)
-      {
-        mooseWarning(mesh_generator_name + " has " + std::to_string(set_pitches.size())
-          + " associated with the lattice. Using largest: " + std::to_string(max_pitch));
-      }
-
-      // get height from axial heights list and name region accordingly
-      std::string unit_name;
       if (geom_dim == 3)
       {
-        // get height from axial heights list and name region accordingly
-        unit_name = mesh_generator_name + "_lattice_axial_" + std::to_string(ax_id);
+        // record the axial stack unit
         std::pair<std::string, Real> p;
-        p.first = unit_name;
+        p.first = last_unit_name;
         p.second = axial_heights[ax_id];
         axial_stack.push_back(p);
       }
-      else
-      {
-        unit_name = mesh_generator_name + "_lattice";
-      }
 
-      // form lattice for this axial region
-      titan_inp[unit_name] = {
-        lat_type,
-        {
-          {dim_type, dimension},
-          {"pitch", max_pitch},
-          {"fill", bg_material},
-          {"elements", elements}
-        }
-      };
       ax_id = ax_id + 1;
     }
-
-    // get any duct regions and insert them into each other
-    if (hasMeshProperty(RGMB::duct_halfpitches, mesh_generator_name))
-    {
-      int num_sides;
-      if (geom_mesh_type == "Hex")
-      {
-        num_sides = 6;
-      }
-      else{
-        num_sides = 4;
-      }
-
-      // iterate over duct regions (assume half pitches are in ascending order)
-      const auto duct_halfpitches = getMeshProperty<std::vector<Real>>(RGMB::duct_halfpitches, mesh_generator_name);
-      const auto duct_region_ids = getMeshProperty<std::vector<std::vector<unsigned short>>>(RGMB::duct_region_ids, mesh_generator_name);
-      Real max_pitch = *std::max_element(duct_halfpitches.begin(), duct_halfpitches.end());
-
-      // reset the axial stack and use the nested ducted regions for the stack instead
-      axial_stack.clear() ;
-
-      int ax_id = 0;
-      for (auto & ax_reg : duct_region_ids)
-      {
-        std::string last_unit_name;
-        int duct_id = 0;
-        for (auto & hp : duct_halfpitches)
-        {
-          std::string material = "material_" + std::to_string(ax_reg[duct_id]);
-
-          // if we are working with the outermost ducted region and geometry is 2D,
-          // then the unit name is the mesh generator name
-          std::string unit_name;
-          if ((hp == max_pitch) && (geom_dim == 2))
-          {
-            unit_name = mesh_generator_name;
-          }
-          else
-          {
-            // define base name by ducted region
-            unit_name = mesh_generator_name + "_duct_" + std::to_string(duct_id);
-          }
-
-          // add axial region to name if 3d
-          if (geom_dim == 3)
-          {
-            unit_name =  unit_name + "_axial_" + std::to_string(ax_id);
-          }
-
-          // get "inserts" for the polygon
-          std::vector<std::string> inserts;
-          std::string name_insert ;
-          if (duct_id == 0)
-          {
-            // insert pin lattice for inner-most
-            name_insert = mesh_generator_name + "_lattice";
-          }
-          else
-          {
-            // insert previous ducted region for all other regions
-            name_insert = mesh_generator_name + "_duct_" + std::to_string(duct_id - 1);
-
-          }
-          if (geom_dim == 3){
-            name_insert = name_insert + "_axial_" + std::to_string(ax_id);
-          }
-
-          // make the polygon with appropriate inserts
-          inserts.push_back(name_insert);
-          titan_inp[unit_name] = {"POLYGON_DOMAIN", material, {num_sides, hp}, {"inserts", inserts}};
-
-          // record last radial region and use this as the stack info
-          last_unit_name = unit_name;
-
-          duct_id = duct_id + 1;
-        }
-
-        if (geom_dim == 3)
-        {
-          // record the axial stack unit
-          std::pair<std::string, Real> p;
-          p.first = last_unit_name;
-          p.second = axial_heights[ax_id];
-          axial_stack.push_back(p);
-        }
-
-        ax_id = ax_id + 1;
-      }
-    }
-
-    // if working in 3D create the axial stack
-    if (geom_dim == 3)
-    {
-      titan_inp[mesh_generator_name] = {"AXIAL_STACK", axial_stack};
-    }
   }
 
-  else{
-    // get single_pin assembly info
+  // if working in 3D create the axial stack
+  if (geom_dim == 3)
+  {
+    titan_inp[mesh_generator_name] = {"AXIAL_STACK", axial_stack};
   }
+
   return titan_inp;
-
 }
 
 nlohmann::json
