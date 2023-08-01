@@ -69,7 +69,7 @@ MonteCarloGeomAction::act()
       Moose::out << "We are making the Titan input" << std::endl;
 
       // gather list of units
-      std::vector<nlohmann::json> units;
+      nlohmann::json titan_inp;
 
       // final mesh generator to use
       const auto & final_mg = _app.getMeshGenerator(final_mgn);
@@ -80,24 +80,34 @@ MonteCarloGeomAction::act()
         // to the final requested
         if (final_mg.isParentMeshGenerator(mgn, false) || (mgn == final_mgn))
         {
+          Moose::out << mgn << std::endl;
+          nlohmann::json units;
           const auto & mg = _app.getMeshGenerator(mgn);
           if (mg.type() == "CoreMeshGenerator")
           {
-            units.push_back(makeCoreMeshJSON(mgn, rpm_name));
+            titan_inp["units"].update(makeCoreMeshJSON(mgn, rpm_name));
           }
           else if (mg.type() == "AssemblyMeshGenerator")
           {
-            units.push_back(makeAssemblyMeshJSON(mgn, rpm_name));
+            titan_inp["units"].update(makeAssemblyMeshJSON(mgn, rpm_name));
           }
           else if (mg.type() == "PinMeshGenerator")
           {
-            units.push_back(makePinMeshJSON(mgn, rpm_name));
+            titan_inp["units"].update(makePinMeshJSON(mgn, rpm_name));
           }
+
+          // add intermediate units list to the existing units list
+          // if (titan_inp.is_null())
+          // {
+          //   titan_inp["units"] = units;
+          // }
+          // else
+          // {
+          //   titan_inp["units"].update(units);
+          // }
         }
       }
 
-    nlohmann::json titan_inp;
-    titan_inp["units"] = units;
     Moose::out << titan_inp.dump(4) << std::endl;
 
     }
