@@ -94,7 +94,12 @@ MonteCarloGeomAction::act()
         }
       }
 
-    Moose::out << titan_inp.dump(4) << std::endl;
+      // write generated json to file
+      std::string json_out = _app.getOutputFileBase() + "_titan.json";
+      std::ofstream titan_file;
+      titan_file.open(json_out);
+      titan_file << titan_inp.dump(2);
+      titan_file.close();
 
     }
   }
