@@ -29,5 +29,6 @@ public:
                              std::vector<std::string> names,
                              std::string unit_name,
                              std::string fill_name,
-                             int axial_id);
+                             int axial_id,
+                             Real null_height);
 };

@@ -111,7 +111,8 @@ MonteCarloGeomAction::makeLattice(std::string geom_mesh_type,
                                   std::vector<std::string> names,
                                   std::string unit_name,
                                   std::string fill_name,
-                                  int axial_id)
+                                  int axial_id,
+                                  Real null_height)
 {
   nlohmann::json titan_inp;
 
@@ -187,7 +188,14 @@ MonteCarloGeomAction::makeLattice(std::string geom_mesh_type,
   if (make_null)
   {
     int num_sides = (geom_mesh_type == "Hex") ? 6 : 4;
-    titan_inp[unit_name + "_null"] = {"POLYGON_DOMAIN", fill_name, {num_sides, max_pitch / 2.0}};
+    if (null_height > 0)
+    {
+      titan_inp[unit_name + "_null"] = {"EXTRUDED_POLYGON_DOMAIN", {null_height, {fill_name, {num_sides, max_pitch / 2.0}}}};
+    }
+    else
+    {
+      titan_inp[unit_name + "_null"] = {"POLYGON_DOMAIN", {fill_name, {num_sides, max_pitch / 2.0}}};
+    }
   }
 
   return titan_inp;
@@ -198,6 +206,14 @@ MonteCarloGeomAction::makeCoreMeshJSON(std::string mesh_generator_name, std::str
 {
   nlohmann::json titan_inp;
   const auto geom_mesh_type = getMeshProperty<std::string>(RGMB::mesh_geometry, rpm_name);
+  int geom_dim = getMeshProperty<int>(RGMB::mesh_dimensions, rpm_name);
+  Real null_height = 0.0;
+  if (geom_dim == 3)
+  {
+    std::vector<Real> axial_heights =
+        getMeshProperty<std::vector<Real>>(RGMB::axial_mesh_sizes, rpm_name);
+    null_height = std::accumulate(axial_heights.begin(), axial_heights.end(), 0);
+  }
 
   // get assembly lattice
   const auto assembly_lattice =
@@ -205,7 +221,7 @@ MonteCarloGeomAction::makeCoreMeshJSON(std::string mesh_generator_name, std::str
   const auto assembly_names =
       getMeshProperty<std::vector<std::string>>(RGMB::assembly_names, mesh_generator_name);
 
-  titan_inp = makeLattice(geom_mesh_type, assembly_lattice, assembly_names, mesh_generator_name, "void", -1);
+  titan_inp = makeLattice(geom_mesh_type, assembly_lattice, assembly_names, mesh_generator_name, "void", -1, null_height);
 
   return titan_inp;
 }
@@ -243,7 +259,7 @@ MonteCarloGeomAction::makeAssemblyMeshJSON(std::string mesh_generator_name, std:
       : mesh_generator_name + "_lattice";
 
     // make the lattice
-    titan_inp[unit_name] = makeLattice(geom_mesh_type, pin_lattice, pin_names, unit_name, bg_material, ax_id);
+    titan_inp[unit_name] = makeLattice(geom_mesh_type, pin_lattice, pin_names, unit_name, bg_material, ax_id, 0.0);
 
     // get height from axial heights list and name region accordingly
     if (geom_dim == 3)
