@@ -259,7 +259,7 @@ MonteCarloGeomAction::makeAssemblyMeshJSON(std::string mesh_generator_name, std:
       : mesh_generator_name + "_lattice";
 
     // make the lattice
-    titan_inp[unit_name] = makeLattice(geom_mesh_type, pin_lattice, pin_names, unit_name, bg_material, ax_id, 0.0);
+    titan_inp.update(makeLattice(geom_mesh_type, pin_lattice, pin_names, unit_name, bg_material, ax_id, 0.0));
 
     // get height from axial heights list and name region accordingly
     if (geom_dim == 3)
