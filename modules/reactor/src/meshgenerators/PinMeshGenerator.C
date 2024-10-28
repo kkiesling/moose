@@ -90,6 +90,9 @@ PinMeshGenerator::validParams()
                              "radial pin regions, the single bridging background region, and the "
                              "square or hexagonal ducts regions.");
 
+  // Declare that this generator has a generateCSG method
+  MeshGenerator::setHasGenerateCSG(params);
+
   return params;
 }
 
@@ -731,4 +734,10 @@ PinMeshGenerator::generate()
 
   (*_build_mesh)->set_isnt_prepared();
   return std::move(*_build_mesh);
+}
+
+void
+PinMeshGenerator::generateCSG()
+{
+  std::cout << "Calling generateCSG method for " << name() << "\n";
 }

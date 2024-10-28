@@ -26,6 +26,8 @@ public:
 
   void generateData() override{};
 
+  void generateCSG() override;
+
 protected:
   /// The number of dimension in the mesh
   const MooseEnum _dim;

@@ -59,6 +59,8 @@ ReactorMeshParams::validParams()
 
   // Declare that this generator has a generateData method
   MeshGenerator::setHasGenerateData(params);
+  // Declare that this generator has a generateCSG method
+  MeshGenerator::setHasGenerateCSG(params);
   return params;
 }
 
@@ -111,7 +113,7 @@ ReactorMeshParams::ReactorMeshParams(const InputParameters & parameters)
   const auto & moose_mesh = _app.actionWarehouse().getMesh();
   const auto data_driven_generator =
       moose_mesh->parameters().get<std::string>("data_driven_generator");
-  bool bypass_meshgen = (data_driven_generator != "") && isDataOnly();
+  bool bypass_meshgen = isDataOnly();
   this->declareMeshProperty(RGMB::bypass_meshgen, bypass_meshgen);
 
   // Declare name id map only if RGMB is outputting a mesh
@@ -154,4 +156,10 @@ ReactorMeshParams::generate()
   }
   auto mesh = buildMeshBaseObject();
   return dynamic_pointer_cast<MeshBase>(mesh);
+}
+
+void
+ReactorMeshParams::generateCSG()
+{
+  std::cout << "Calling generateCSG method for " << name() << "\n";
 }

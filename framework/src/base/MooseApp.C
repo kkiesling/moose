@@ -108,6 +108,12 @@ MooseApp::validParams()
       "mesh_only",
       "--mesh-only [mesh_file_name]",
       "Setup and Output the input mesh only (Default: \"<input_file_name>_in.e\")");
+  params.addCommandLineParam<std::string>(
+      "csg_only",
+      "--csg-only",
+      "Setup and Output the input mesh in CSG format only (Default: \"<input_file_name>_in.e\")");
+  // TODO KALIN: this will need to be updated to reflect output file format for CSG base file
+
 
   params.addCommandLineParam<bool>("show_input",
                                    "--show-input",
@@ -993,7 +999,18 @@ MooseApp::setupOptions()
 
     _builder.build();
 
-    if (isParamValid("mesh_only"))
+    if (isParamValid("csg_only"))
+    {
+      _syntax.registerTaskName("execute_csg_generators", true);
+      _syntax.addDependency("execute_csg_generators", "execute_mesh_generators");
+      _syntax.addDependency("recover_meta_data", "execute_csg_generators");
+
+      _syntax.registerTaskName("csg_only", true);
+      _syntax.addDependency("csg_only", "recover_meta_data");
+      _syntax.addDependency("set_mesh_base", "csg_only");
+      _action_warehouse.setFinalTask("csg_only");
+    }
+    else if (isParamValid("mesh_only"))
     {
       _syntax.registerTaskName("mesh_only", true);
       _syntax.addDependency("mesh_only", "setup_mesh_complete");
@@ -1121,7 +1138,7 @@ MooseApp::runInputFile()
 
   _action_warehouse.executeAllActions();
 
-  if (isParamValid("mesh_only") || isParamValid("split_mesh"))
+  if (isParamValid("csg_only") || isParamValid("mesh_only") || isParamValid("split_mesh"))
     _ready_to_exit = true;
   else if (getParam<bool>("list_constructed_objects"))
   {
