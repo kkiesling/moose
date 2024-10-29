@@ -19,6 +19,8 @@
 #include "libmesh/mesh_base.h"
 #include "libmesh/parameters.h"
 
+#include "CSGBase.h"
+
 class MooseMesh;
 namespace libMesh
 {
@@ -86,7 +88,7 @@ public:
    * within MooseApp to execute the MeshGenerator.
    */
   // TODO KALIN return type of this method should be updated
-  void generateInternalCSG();
+  CSGBase generateInternalCSG();
 
   /**
    * Internal generation method - this is what is actually called
@@ -223,7 +225,7 @@ protected:
   /**
    * Generate the CSG mesh
    */
-  virtual void generateCSG();
+  virtual CSGBase generateCSG();
 
   /**
    * Methods for writing out attributes to the mesh meta-data store, which can be retrieved from

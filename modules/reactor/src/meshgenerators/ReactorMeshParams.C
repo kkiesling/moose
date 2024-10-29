@@ -158,8 +158,12 @@ ReactorMeshParams::generate()
   return dynamic_pointer_cast<MeshBase>(mesh);
 }
 
-void
+CSGBase
 ReactorMeshParams::generateCSG()
 {
   std::cout << "Calling generateCSG method for " << name() << "\n";
+  _csg_obj = CSGBase();
+  std::cout << _csg_obj.sample_num << "\n";
+  _csg_obj.example_func();
+  return _csg_obj;
 }

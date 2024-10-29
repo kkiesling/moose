@@ -340,11 +340,14 @@ MeshGenerator::generateInternal()
   return mesh;
 }
 
-void
+CSGBase
 MeshGenerator::generateInternalCSG()
 {
   mooseAssert(isDataOnly(), "Trying to use csg-only mode while not in data-driven mode");
-  generateCSG();
+  std::cout << "Calling generateCSG from internal..\n";
+  auto csg = generateCSG();
+  std::cout << "..finished generateCSG from internal\n";
+  return csg;
 }
 
 void
@@ -444,9 +447,10 @@ MeshGenerator::generateData()
   mooseError("This MeshGenerator does not have a generateData() implementation.");
 }
 
-void
+CSGBase
 MeshGenerator::generateCSG()
 {
   mooseAssert(!hasGenerateCSG(), "Inconsistent flag");
   mooseError("This MeshGenerator does not have a generateCSG() implementation.");
+  return CSGBase();
 }

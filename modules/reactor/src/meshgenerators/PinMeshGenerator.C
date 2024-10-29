@@ -736,8 +736,11 @@ PinMeshGenerator::generate()
   return std::move(*_build_mesh);
 }
 
-void
+CSGBase
 PinMeshGenerator::generateCSG()
 {
   std::cout << "Calling generateCSG method for " << name() << "\n";
+  std::cout << _csg_obj.sample_num << "\n";
+  _csg_obj.example_func();
+  return _csg_obj;
 }
