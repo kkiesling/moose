@@ -52,9 +52,18 @@ protected:
    *
    * @param name name of surface
    *
-   * @return reference to CSGSurface of the specified name
+   * @return const reference to CSGSurface of the specified name
    */
-  CSGSurface & getSurface(const std::string & name) const;
+  const CSGSurface & getSurface(const std::string & name) const;
+
+  /**
+   * @brief Get a surface by name
+   *
+   * @param name name of surface
+   *
+   * @return non-const reference to CSGSurface of the specified name
+   */
+  CSGSurface & getSurface(const std::string & name);
 
   /**
    * @brief add a surface object to existing SurfaceList. Ownership of surface will be transferred

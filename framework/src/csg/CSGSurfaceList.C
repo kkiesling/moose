@@ -19,14 +19,22 @@ namespace CSG
 
 CSGSurfaceList::CSGSurfaceList() {}
 
-CSGSurface &
+const CSGSurface &
 CSGSurfaceList::getSurface(const std::string & name) const
 {
-  auto surf = _surfaces.find(name);
-  if (surf == _surfaces.end())
-    mooseError("No surface by name " + name + " exists in the geometry.");
-  else
-    return *(surf->second);
+  if (const auto it = _surfaces.find(name); it != _surfaces.end())
+  {
+    auto & surface_ptr = it->second;
+    mooseAssert(surface_ptr, "Null surface");
+    return *surface_ptr;
+  }
+  mooseError("No surface by name " + name + " exists in the geometry.");
+}
+
+CSGSurface &
+CSGSurfaceList::getSurface(const std::string & name)
+{
+  return const_cast<CSGSurface &>(std::as_const(*this).getSurface(name));
 }
 
 std::vector<std::reference_wrapper<const CSGSurface>>
@@ -50,17 +58,21 @@ CSGSurfaceList::addSurface(std::unique_ptr<CSGSurface> surf)
 void
 CSGSurfaceList::renameSurface(const CSGSurface & surface, const std::string & name)
 {
+  // check that name is not already being used in _surfaces
+  if (_surfaces.find(name) != _surfaces.end())
+    mooseError("Surface with name " + name + " already exists in geometry.");
+
   // check that this surface passed in is actually in the same surface that is in the surface
   // list
-  auto prev_name = surface.getName();
-  auto existing_surface = std::move(_surfaces.find(prev_name)->second);
-  if ((*existing_surface) != surface)
+  const auto & prev_name = surface.getName();
+  auto nh = _surfaces.extract(prev_name);
+  if (!nh || nh.mapped().get() != &surface)
     mooseError("Surface " + prev_name + " cannot be renamed to " + name +
                " as it does not exist in this CSGBase instance.");
 
-  existing_surface->setName(name);
-  _surfaces.erase(prev_name);
-  addSurface(std::move(existing_surface));
+  nh.key() = name;
+  nh.mapped().get()->setName(name);
+  _surfaces.insert(std::move(nh));
 }
 
 } // namespace CSG
